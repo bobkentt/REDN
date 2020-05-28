@@ -115,7 +115,7 @@ class BERTEncoder(nn.Module):
 class BERTHiddenStateEncoder(BERTEncoder):
     def __init__(self, pretrain_path, blank_padding=True):
         super().__init__(80, pretrain_path, blank_padding)
-        self.bert = BertModel.from_pretrained(pretrain_path, output_hidden_states=True,output_attentions=True)
+        self.bert = BertModel.from_pretrained(pretrain_path, output_hidden_states=True, output_attentions=True)
 
     def forward(self, token, att_mask):
         """
@@ -125,6 +125,9 @@ class BERTHiddenStateEncoder(BERTEncoder):
         Return:
             (B, H), representations for sentences
         """
+        # x表示bert分类任务结果
+        # hs是隐层输出结果
+        # atts表示attention结果
         _, x, hs ,atts= self.bert(token, attention_mask=att_mask)
         return x, hs, atts
 

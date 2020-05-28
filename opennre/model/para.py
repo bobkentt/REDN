@@ -51,22 +51,32 @@ class PARA(SentenceRE):
         return self.id2rel[pred], score
 
     def forward(self, token, att_mask):
+        # subject_output对应论文里的Ew
+        # rep.view(-1, 1, rep.shape[-1])对应的是Ea
+        # hs[-1]就是Ep
         bs = token.shape[0]
         sl = token.shape[1]
 
+        # 这里就是encode的过程，把隐层和atts给取了出来。
         rep, hs, atts = self.sentence_encoder(token, att_mask)  # (B, H)
         if self.subject_1:
             subject_output = hs[-1]  # BS * SL * HS
         else:
             subject_output = hs[-2]  # BS * SL * HS
+
+        # 接了个全连接层，用第11层
         subject_output_logits = self.subject_output_fc(subject_output)  # BS * SL * NTL
 
         if self.use_cls:
+            # Eb = Ew + Ea
             subject_output = subject_output + rep.view(-1, 1, rep.shape[-1])
         # score = self.attn_score(hs[-1], subject_output)  # BS * NTL * SL * SL
+        # 这里就是去计算Eb和Ep的相似性
         score = self.attn_score(hs[-1], subject_output)  # BS * NTL * SL * SL
 
+        # 到了这步，这score就是论文里的P了
         score = score.sigmoid()
+
 
         return score, subject_output_logits, atts[-1]
 
@@ -88,6 +98,9 @@ class MultiHeadAttention(torch.nn.Module):
         return x.permute([0, 2, 1, 3])  # BS * NH * SL * H
 
     def forward(self, k, q):  # BS * SL * HS
+        # 这块就是在实现论文中Relation Computing Layer那块
+        # 这里的键向量k其实就是Ep
+        # 查询向量q就是Eb
         batch_size = q.shape[0]
 
         q = self.Wq(q)  # BS * SL * OUT
@@ -96,6 +109,7 @@ class MultiHeadAttention(torch.nn.Module):
         # q = F.dropout(q, 0.8, training=self.training)
         # k = F.dropout(k, 0.8, training=self.training)
 
+        # 这里就是transformer那篇论文里分解成多头，以及attention部分了，没啥特殊的
         q = self.split_into_heads(q, batch_size)  # BS * NH * SL * H
         k = self.split_into_heads(k, batch_size)  # BS * NH * SL * H
 

@@ -36,6 +36,7 @@ class SentenceRE(nn.Module):
 
         # Model
         self.model = model
+        # 这是为了多GPU并行
         self.parallel_model = nn.DataParallel(self.model)
         # nn.parallel.DistributedDataParallel(self.model,device_ids=)
         # Criterion
@@ -79,12 +80,14 @@ class SentenceRE(nn.Module):
         best_metric = 0
         global_step = 0
 
+        # 这就是训练主循环
         for epoch in range(self.max_epoch):
             self.train()
 
             print("=== Epoch %d train ===" % epoch)
             avg_loss = AverageMeter()
             avg_acc = AverageMeter()
+            # 用了tqdm是为了带进度条
             t = tqdm(self.train_loader)
 
             # self.metric.reset()
@@ -100,6 +103,7 @@ class SentenceRE(nn.Module):
                 label = data[-2]
                 args = data[0:2]
                 logits, subject_label_logits, attx = self.parallel_model(*args)
+                # 这就是计算损失函数
                 loss = self.loss_func(logits, label)
 
                 if self.add_subject_loss:
@@ -114,6 +118,7 @@ class SentenceRE(nn.Module):
 
                 t.set_postfix(loss=avg_loss.avg)
                 # Optimize
+                # 这块用了warmup，学习率逐渐变化
                 if warmup == True:
                     warmup_step = 300
                     if global_step < warmup_step:
@@ -122,8 +127,11 @@ class SentenceRE(nn.Module):
                         warmup_rate = 1.0
                     for param_group in self.optimizer.param_groups:
                         param_group['lr'] = self.lr * warmup_rate
+                # loss反向传播
                 loss.backward()
+                # 反向传播后更新参数
                 self.optimizer.step()
+                # 梯度置零，因为反向传播过程中梯度会累加上一次循环的梯度
                 self.optimizer.zero_grad()
                 global_step += 1
             # Val 
@@ -136,9 +144,11 @@ class SentenceRE(nn.Module):
                     if not os.path.exists(folder_path):
                         os.mkdir(folder_path)
                     # torch.save({'state_dict': self.model.state_dict()}, self.ckpt)
+                    # 保存模型
                     torch.save(self.parallel_model, self.ckpt)
                     best_metric = result[metric]
             else:
+                # 保存模型
                 torch.save(self.parallel_model, self.ckpt)
         print("Best %s on val set: %f" % (metric, best_metric))
 

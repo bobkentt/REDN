@@ -48,6 +48,7 @@ def train(dataset_name, batch_size=50, num_workers=2, max_epoch=15, lr=3e-5, wei
         "-1" if subject_1 else "-2",
         "1024" if bert_large else "768",)
 
+    # 这个函数是获取数据集，初步看代码时，可以跳过这种偏细节部分。有一点注意看，就是在这里把分词器tokenize传给了data_loader
     def get_dataset(_model):
         if all(map(lambda x: os.path.exists(os.path.join(root_path, dataset_name, x)), dataset_pkl_file)):
             dataset = list(
@@ -87,11 +88,14 @@ def train(dataset_name, batch_size=50, num_workers=2, max_epoch=15, lr=3e-5, wei
 
     rel2id = json.load(open(os.path.join(root_path, dataset_name, 'rel2id.json')))
 
+    # 这部分代码是构建网络结构，安装网络结构图将网络构建出来，先弄em层，然后模型其它部分
     sentence_encoder = encoder.BERTHiddenStateEncoder(pretrain_path=bert_path)
     _model = model.PARA(sentence_encoder, len(rel2id), rel2id, num_token_labels=2, subject_1=subject_1, use_cls=use_cls)
 
+    # 这块就是为了获取数据集loader，由于深度学习按批次训练，不是一次把全部数据放入模型，batch形式的，所以要有loader负责这个活。
     train_loader, val_loader, test_loader = get_dataset(_model)
 
+    # 因为用了opennre的框架，所以这样子，这里其实主要是传入一些超参，这一步才真正的构建了神经网络的结构
     _framework = framework.SentenceRE(
         train_loader=train_loader,
         val_loader=val_loader if dataset_name not in ["nyt10", "nyt10_1"] else test_loader,
@@ -112,6 +116,7 @@ def train(dataset_name, batch_size=50, num_workers=2, max_epoch=15, lr=3e-5, wei
                         ),
     )
 
+    # 这里有一个继续训练的情况，比如训练了几轮，因为什么原因，停下了，可以从checkpoint中加载进来继续训练。train_model这个函数负责训练
     if not eval:
         if continue_train:
             _framework.parallel_model.load_state_dict(torch.load(ckpt).state_dict())
@@ -171,6 +176,7 @@ def get_ablation_args(dataset, max_epoch, batch_size, **kwargs):
 
 
 if __name__ == '__main__':
+    # 这部分代码就是为了处理命令行参数，可以选择不同的数据集，是做train还是perdict
     dataset_name = sys.argv[1]
     is_train = sys.argv[2] == "t"
 
@@ -178,6 +184,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 3:
         task_id = int(sys.argv[3])
     print("==========%s %s============" % (dataset_name, str(task_id)))
+    # 解析是用什么训练集
     if dataset_name in ["semeval", "semeval_1"]:
         max_epoch = 50
         batch_size = 64
